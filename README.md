@@ -1,4 +1,5 @@
 # Distributed-intelligent-production-involving-remote-actors
+Project work 2020 https://wiki.aalto.fi/display/AEEproject/Distributed+intelligent+production+involving+remote+actors  
 
 ## Node-RED ROS integration
 
