@@ -1,0 +1,52 @@
+<script type="text/javascript">
+  RED.nodes.registerType("ros-subscriber", {
+    category: "ROS",
+    defaults: {
+      connection: {type: "ros-connection"},
+      topic: {value: "/message", required: true},
+      rate: {value: 0, validate: RED.validators.number()},
+      name: {value: ""}
+    },
+    inputs: 0,
+    outputs: 1,
+    label: function() {
+      return this.name || "ros-subscriber";
+    }
+  });
+</script>
+
+<script type="text/html" data-template-name="ros-subscriber">
+  <div class="form-row">
+    <label for="node-input-connection">Connection</label>
+    <input type="text" id="node-input-connection">
+  </div>
+  <div class="form-row">
+    <label for="node-input-topic">Topic</label>
+    <input type="text" id="node-input-topic">
+  </div>
+  <div class="form-row">
+    <label for="node-input-rate">Rate</label>
+    <input type="text" id="node-input-rate">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name">Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="ros-subscriber">
+  <p>Subscribes to ROS topic via rosbridge server.</p>
+  <h3>Outputs</h3>
+    <dl class="message-properties">
+      <dt>payload
+        <span class="property-type">JSON object</span> 
+      </dt>
+      <dd>Received message represented as a JSON object.</dd>
+    </dl>
+  <h3>Details</h3>
+    <p>ROS connection node must be created before using ROS subscriber or ROS publisher nodes. A ROS subscriber node will subscribe to a ROS topic specified in the node configuration. The rate at which messages are received can be limited by specifying an optional throttle rate in the node configuration.</p>
+  <h3>References</h3>
+    <ul>
+      <li><a href="https://wiki.ros.org/roslibjs">roslibjs</a> - roslibjs JavaScript library documentation and tutorials</li>
+    </ul>
+</script>
