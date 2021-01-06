@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+
+<script type="text/javascript" src="http://static.robotwebtools.org/EventEmitter2/current/eventemitter2.min.js"></script>
+<script type="text/javascript" src="http://static.robotwebtools.org/roslibjs/current/roslib.min.js"></script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+
+
+</head>
+
+<body>
+    <h1>test</h1>
+    <canvas id="mapcanvas" width="400" height="400"></canvas> 
+    <script>
+    
+   
+    
+    //ROS SETUP
+    var ros = new ROSLIB.Ros({
+        url : 'ws://localhost:9090'
+    });
+    
+    ros.on('connection', function() {
+        console.log('Connected to websocket server.');
+    });
+    
+    ros.on('error', function(error) {
+        console.log('Error connecting to websocket server: ', error);
+    });
+    
+    ros.on('close', function() {
+        console.log('Connection to websocket server closed.');
+    });
+    
+
+
+    //ENVIRONMENT STATUS VARS
+    var robot_x = 0;
+    var robot_y = 0;
+    var robot_yaw = 0;
+    
+    var map_xdim = 0;
+    var map_ydim = 0;
+    var map_res = 0.05;
+    var map_data = [];
+
+    //navpoint vars
+    //NOTE! THESE ARE IN PIXEL COORDINATES
+    //DIFFERENT CONVERSION RULES APPLY THAN WITH E.G ROBOT COORDS
+    var navpoint_x = 0;
+    var navpoint_y = 0;
+    var navpoint_x2 = 0;
+    var navpoint_y2 = 0;
+    var navpoint_yaw = 0;
+    
+    //DRAWING VARS
+    //Map is created directly from data
+    var c = document.getElementById("mapcanvas");
+    var ctx = c.getContext("2d");
+
+    //map
+    var map_imdg_blank = ctx.createImageData(1,1);
+    var map_db = map_imdg_blank.data;
+    var map_imdg = ctx.createImageData(1,1);
+    var map_d = map_imdg.data;
+    map_d[0] = 0;
+    map_d[1] = 0;
+    map_d[2] = 0;
+    map_d[3] = 255;
+
+    //robot
+    //TODO figure out a better way to represent the robot
+    var rob_imdg = ctx.createImageData(5,5);
+    var rob_d = rob_imdg.data;
+    for(i = 0; i < 25; i++){
+        rob_d[4*i+0] = 255;
+        rob_d[4*i+1] = 0;
+        rob_d[4*i+2] = 0;
+        rob_d[4*i+3] = 255;
+    }
+    
+    //navpoint
+    var nav_imdg = ctx.createImageData(5,5);
+    var nav_d = nav_imdg.data;
+    for(i = 0; i < 25; i++){
+        nav_d[4*i+0] = 0;
+        nav_d[4*i+1] = 0;
+        nav_d[4*i+2] = 255;
+        nav_d[4*i+3] = 255;
+    }
+        
+    
+    //NAV GOAL TOPIC
+    var dest = new ROSLIB.Topic({
+        ros : ros,
+        name : '/move_base_simple/goal',
+        messageType :  'geometry_msgs/PoseStamped'
+    });
+    var ts = Math.floor((new Date()).getTime() / 1000);
+    var tns = ((new Date()).getTime() - ts*1000)*1000000;
+
+    //JQUERY
+    jQuery(document).ready(function() {
+        $('#mapcanvas').mousedown(function(){
+            var cpos = $('#mapcanvas').offset();
+            navpoint_x = event.pageX - cpos.left;
+            navpoint_y = event.pageY - cpos.top;            
+        });
+        
+        $('#mapcanvas').mouseup(function(){
+            var cpos = $('#mapcanvas').offset();
+            navpoint_x2 = event.pageX - cpos.left;
+            navpoint_y2 = event.pageY - cpos.top;
+            if (navpoint_x2-navpoint_x == 0){
+                navpoint_yaw = 0;
+            }
+            else{
+                navpoint_yaw = Math.atan2((navpoint_y2-navpoint_y),(navpoint_x2-navpoint_x));
+
+            }
+            var posestamped = new ROSLIB.Message({        
+                header: {
+                    seq: 0,
+                    stamp: {
+                        secs: ts,
+                        nsecs: tns 
+                    }, 
+                    frame_id: 'map' 
+                },
+                pose : {
+                    position:{
+                        x:navpoint_x*map_res,
+                        y:navpoint_y*map_res,
+                        z:0.0
+                    },
+                    orientation: {
+                        x:0.0,
+                        y:0.0,
+                        z:Math.sin(navpoint_yaw/2.0),
+                        w:Math.cos(navpoint_yaw/2.0)
+                    }
+                }
+            });
+            console.log('navpoint created at x: ' + navpoint_x*map_res + ' y: ' + navpoint_y*map_res + ' yaw: ' + navpoint_yaw);
+            dest.publish(posestamped);
+            drawenv();
+            
+        });
+    });
+
+
+
+    //GET MAP
+    var getmap = new ROSLIB.Topic({
+        ros : ros,
+        name : '/map',
+        messageType : 'nav_msgs/OccupancyGrid'
+    });
+
+    getmap.subscribe(function(message) {
+        //set map vars
+        map_res = message.info.resolution;
+        map_xdim = message.info.width;
+        map_ydim = message.info.height;
+        map_data = message.data;
+        //set blank canvas size
+        map_imdg_blank = ctx.createImageData(map_xdim,map_ydim);
+        map_imdg = ctx.createImageData(map_xdim, map_ydim);
+        for(i = 0; i < map_xdim*map_ydim; i++){
+            map_imdg_blank.data[4*i+0] = 255;
+            map_imdg_blank.data[4*i+1] = 255;
+            map_imdg_blank.data[4*i+2] = 255;
+            map_imdg_blank.data[4*i+3] = 255;
+            
+            var scaled_map_d = map_data[i]/100.0*255.0;
+            
+            map_imdg.data[4*i+0] = 255 - scaled_map_d;
+            map_imdg.data[4*i+1] = 255 - scaled_map_d;
+            map_imdg.data[4*i+2] = 255 - scaled_map_d;
+            map_imdg.data[4*i+3] = 255;            
+        }
+        ctx.canvas.width = message.info.width;
+        ctx.canvas.height = message.info.height;
+        drawenv();        
+    });
+
+    //GET ROBOT POS
+    var getrobotpos = new ROSLIB.Topic({
+        ros : ros,
+        name : '/amcl_pose',
+        messageType : 'geometry_msgs/PoseWithCovarianceStamped'
+    });
+
+    getrobotpos.subscribe(function(message) {
+        robot_x = message.pose.pose.position.x;
+        robot_y = message.pose.pose.position.y;
+        //TODO robot yaw, maybe just use quaternion       
+        drawenv();
+    });
+
+
+    //DRAW ENVIRONMENT
+    function drawenv() {
+        console.log('env draw fired');
+        ctx.putImageData( map_imdg_blank, 0, 0);
+        ctx.putImageData( map_imdg, 0, 0);
+        ctx.putImageData( rob_imdg, Math.round(robot_x/map_res), Math.round(robot_y/map_res));
+        ctx.putImageData( nav_imdg, Math.round(navpoint_x), Math.round(navpoint_y));
+    }
+      
+</script>
+</body>
+</html>
